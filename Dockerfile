@@ -1,41 +1,36 @@
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV XFORMERS_DISABLE=1
-ENV TORCH_CUDA_ARCH_LIST="8.6"
+ENV PYTHONUNBUFFERED=1
 
-WORKDIR /app
-
+# System deps
 RUN apt-get update && apt-get install -y \
-    git \
-    ffmpeg \
-    libsndfile1 \
     python3 \
     python3-pip \
+    git \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --upgrade pip setuptools wheel
+# Make python3 default
+RUN ln -s /usr/bin/python3 /usr/bin/python
 
-RUN pip3 install \
-    torch==2.1.0 \
-    torchaudio==2.1.0
+# Upgrade pip
+RUN pip install --upgrade pip
 
-RUN pip3 install audiocraft==1.3.0 --no-deps
+# 🔥 INSTALL PYTORCH (THIS IS THE MISSING PIECE)
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-RUN pip3 install \
-    einops \
-    hydra-core \
-    hydra-colorlog \
-    flashy \
-    huggingface_hub \
+# Transformers + RunPod
+RUN pip install \
     transformers \
-    sentencepiece \
-    num2words \
-    tqdm \
-    soundfile \
+    accelerate \
+    scipy \
     runpod
 
+# App
+WORKDIR /app
 COPY handler.py /app/handler.py
 
-CMD ["python3", "-u", "/app/handler.py"]
+CMD ["python", "/app/handler.py"]
+
 
