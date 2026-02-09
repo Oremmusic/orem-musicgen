@@ -68,15 +68,24 @@ def handler(job):
         ).to(device)
 
         with torch.no_grad():
-            audio_values = model.generate(
-                **inputs,
-                max_new_tokens=duration * 50  # safe heuristic
-            )
+    audio_values = model.generate(
+        **inputs,
+        max_new_tokens=duration * 40
+    )
 
-        audio_tensor = audio_values[0].cpu()
-        audio_bytes = audio_tensor.numpy().tobytes()
+# Decode audio properly (THIS PREVENTS CUDA ASSERTS)
+audio = processor.decode(
+    audio_values[0],
+    sampling_rate=32000
+)
 
-        audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
+
+# Convert float32 audio to bytes safely
+audio_tensor = torch.tensor(audio, dtype=torch.float32)
+audio_bytes = audio_tensor.cpu().numpy().tobytes()
+
+audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
+
 
         return {
             "audio": audio_base64,
