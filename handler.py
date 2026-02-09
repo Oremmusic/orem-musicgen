@@ -1,62 +1,99 @@
+import os
 import base64
-import io
 import torch
-import soundfile as sf
 import runpod
-from audiocraft.models import MusicGen
+from transformers import MusicgenForConditionalGeneration, AutoProcessor
 
-# ---- BOOT LOG (VERY IMPORTANT) ----
-print("🚀 Handler starting...")
-print("🔥 Torch version:", torch.__version__)
-print("🎵 Loading MusicGen model...")
+# ----------------------------
+# Lazy-loaded globals
+# ----------------------------
+model = None
+processor = None
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# ---- LOAD MODEL ONCE ----
-model = MusicGen.get_pretrained("facebook/musicgen-small")
-model.set_generation_params(duration=5)
+# ----------------------------
+# Load model ONLY when needed
+# ----------------------------
+def load_model():
+    global model, processor
 
-print("✅ MusicGen model loaded and ready")
+    if model is None or processor is None:
+        print("🎵 Loading MusicGen model...")
+        processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
+        model = MusicgenForConditionalGeneration.from_pretrained(
+            "facebook/musicgen-small"
+        )
+        model.to(device)
+        model.eval()
+        print("✅ MusicGen model loaded")
 
-# ---- HANDLER FUNCTION ----
-def handler(event):
+# ----------------------------
+# RunPod handler
+# ----------------------------
+def handler(job):
+    """
+    Expected input:
+    {
+      "prompt": "upbeat 90s new jack swing instrumental",
+      "duration": 30,
+      "preview": false
+    }
+    """
+
     try:
-        inputs = event.get("input", {})
-        prompt = inputs.get("prompt", "").strip()
-        duration = int(inputs.get("duration", 5))
+        load_model()
+
+        job_input = job.get("input", {})
+        prompt = job_input.get("prompt")
+        duration = int(job_input.get("duration", 30))
+        preview = bool(job_input.get("preview", False))
 
         if not prompt:
-            return {"error": "Prompt is required"}
+            return {
+                "error": "Prompt is required"
+            }
 
-        # Safety clamp
-        duration = max(1, min(duration, 15))
-        model.set_generation_params(duration=duration)
+        # Clamp duration (important for stability)
+        if preview:
+            duration = min(duration, 10)
+        else:
+            duration = min(duration, 60)
 
-        print(f"🎼 Generating audio | {duration}s | prompt='{prompt}'")
+        print(f"🎶 Generating audio | duration={duration}s | preview={preview}")
+
+        inputs = processor(
+            text=[prompt],
+            padding=True,
+            return_tensors="pt"
+        ).to(device)
 
         with torch.no_grad():
-            wav = model.generate([prompt])
+            audio_values = model.generate(
+                **inputs,
+                max_new_tokens=duration * 50  # safe heuristic
+            )
 
-        audio = wav[0].cpu().numpy()
+        audio_tensor = audio_values[0].cpu()
+        audio_bytes = audio_tensor.numpy().tobytes()
 
-        buffer = io.BytesIO()
-        sf.write(buffer, audio, model.sample_rate, format="WAV")
-        buffer.seek(0)
-
-        audio_b64 = base64.b64encode(buffer.read()).decode("utf-8")
-
-        print("✅ Audio generation complete")
+        audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
 
         return {
-            "status": "success",
-            "audio_base64": audio_b64,
-            "sample_rate": model.sample_rate,
-            "duration": duration
+            "audio": audio_base64,
+            "duration": duration,
+            "preview": preview,
+            "sample_rate": 32000
         }
 
     except Exception as e:
-        print("❌ ERROR:", str(e))
-        return {"error": str(e)}
+        print("❌ Handler error:", str(e))
+        return {
+            "error": str(e)
+        }
 
-# ---- START SERVERLESS ----
+# ----------------------------
+# Start RunPod worker (DO NOT EXIT)
+# ----------------------------
 runpod.serverless.start({
     "handler": handler
 })
