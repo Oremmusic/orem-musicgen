@@ -12,10 +12,10 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip tooling
+# Upgrade pip
 RUN python3 -m pip install --upgrade pip setuptools wheel
 
-# Install PyTorch (CUDA 12.1 – REQUIRED)
+# PyTorch CUDA 12.1 (stable)
 RUN pip install --no-cache-dir \
     torch==2.1.2+cu121 \
     torchvision==0.16.2+cu121 \
@@ -29,7 +29,6 @@ RUN pip install --no-cache-dir \
     soundfile==0.12.1 \
     runpod==1.8.1
 
-# App
 WORKDIR /app
 COPY handler.py /app/handler.py
 
