@@ -15,17 +15,12 @@ RUN apt-get update && apt-get install -y \
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
 # Upgrade pip
-RUN pip install --upgrade pip
+RUN pip install --upgrade pip && \
+    pip uninstall -y numpy && \
+    pip install numpy==1.26.4 && \
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
+    pip install transformers accelerate runpod audiocraft av
 
-# 🔥 INSTALL PYTORCH (THIS IS THE MISSING PIECE)
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# Transformers + RunPod
-RUN pip install \
-    transformers \
-    accelerate \
-    scipy \
-    runpod
 
 # App
 WORKDIR /app
