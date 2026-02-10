@@ -1,4 +1,15 @@
+# -----------------------------
+# Base image (CUDA 12.1 – stable)
+# -----------------------------
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+
+# -----------------------------
+# Environment settings
+# -----------------------------
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV TORCH_CUDA_ARCH_LIST="8.6"
+ENV CUDA_HOME=/usr/local/cuda
 
 # -----------------------------
 # System dependencies
@@ -6,41 +17,47 @@ FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
+    python3-dev \
+    git \
     ffmpeg \
     libsndfile1 \
-    git \
+    build-essential \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------
-# Python setup
+# Upgrade pip tooling
 # -----------------------------
 RUN python3 -m pip install --upgrade pip setuptools wheel
 
-# 🔒 HARD PIN: NumPy < 2 (CRITICAL)
-RUN pip install "numpy<2"
-
 # -----------------------------
-# PyTorch (CUDA 12.1 OFFICIAL)
-# -----------------------------
-RUN pip install \
-    torch==2.1.0+cu121 \
-    torchaudio==2.1.0+cu121 \
-    torchvision==0.16.0+cu121 \
-    --index-url https://download.pytorch.org/whl/cu121
-
-# -----------------------------
-# Core runtime deps (NO audiocraft)
+# Python ML stack
+# IMPORTANT:
+# - NumPy MUST be < 2
+# - Torch installed BEFORE audiocraft
 # -----------------------------
 RUN pip install \
+    "numpy<2" \
+    runpod \
+    torch \
+    torchaudio \
+    torchvision \
     transformers \
     accelerate \
-    soundfile \
-    runpod
+    soundfile
 
 # -----------------------------
-# App
+# Audiocraft (installed LAST)
+# -----------------------------
+RUN pip install --no-cache-dir audiocraft
+
+# -----------------------------
+# App setup
 # -----------------------------
 WORKDIR /app
 COPY handler.py /app/handler.py
 
+# -----------------------------
+# Start RunPod worker
+# -----------------------------
 CMD ["python3", "handler.py"]
