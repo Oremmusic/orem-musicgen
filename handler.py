@@ -1,6 +1,8 @@
 import base64
 import torch
 import runpod
+import io
+import soundfile as sf
 from transformers import MusicgenForConditionalGeneration, AutoProcessor
 
 # ----------------------------
@@ -62,15 +64,31 @@ def handler(job):
             sampling_rate=32000
         )[0]
 
-        audio_tensor = torch.tensor(audio, dtype=torch.float32)
-        audio_bytes = audio_tensor.cpu().numpy().tobytes()
-        audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
+       import io
+import soundfile as sf
+
+# Convert to WAV properly (CRITICAL FIX)
+audio_np = torch.tensor(audio, dtype=torch.float32).cpu().numpy()
+
+wav_buffer = io.BytesIO()
+sf.write(
+    wav_buffer,
+    audio_np,
+    samplerate=32000,
+    format="WAV",
+    subtype="PCM_16"
+)
+
+wav_bytes = wav_buffer.getvalue()
+
+
 
         return {
-            "audio": audio_base64,
-            "duration": duration,
-            "sample_rate": 32000
-        }
+    "audio": wav_bytes,
+    "sample_rate": 32000,
+    "format": "wav"
+}
+
 
     except Exception as e:
         print("❌ Handler error:", str(e))
