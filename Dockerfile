@@ -1,45 +1,67 @@
+# ================================
+# Base image with CUDA + cuDNN
+# ================================
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 
-# ----------------------------
-# Environment
-# ----------------------------
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
-
-# ----------------------------
-# System dependencies
-# ----------------------------
+# ================================
+# System dependencies (CRITICAL)
+# ================================
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
-    ffmpeg \
+    python3-dev \
     git \
+    ffmpeg \
+    libsndfile1 \
+    sox \
     && rm -rf /var/lib/apt/lists/*
 
-# Make python default
-RUN ln -s /usr/bin/python3 /usr/bin/python
+# ================================
+# Python setup
+# ================================
+RUN python3 -m pip install --upgrade pip
 
-# ----------------------------
-# Python dependencies (CRITICAL ORDER)
-# ----------------------------
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir numpy==1.26.4 && \
-    pip install --no-cache-dir \
-        torch \
-        torchvision \
-        torchaudio \
-        --index-url https://download.pytorch.org/whl/cu121 && \
-    pip install --no-cache-dir \
-        transformers \
-        accelerate \
-        runpod
+# ----------------
+# Numpy pin (VERY IMPORTANT)
+# ----------------
+RUN pip uninstall -y numpy && \
+    pip install numpy==1.26.4
 
-# ----------------------------
-# App
-# ----------------------------
+# ----------------
+# PyTorch (CUDA 12.1)
+# ----------------
+RUN pip install torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# ----------------
+# AI + Audio stack
+# ----------------
+RUN pip install \
+    transformers \
+    accelerate \
+    soundfile \
+    runpod \
+    audiocraft \
+    av
+
+# ================================
+# App directory
+# ================================
 WORKDIR /app
+
+# ================================
+# Copy source code
+# ================================
 COPY handler.py /app/handler.py
 
-CMD ["python", "/app/handler.py"]
+# ================================
+# Environment
+# ================================
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_VISIBLE_DEVICES=0
 
+# ================================
+# Start RunPod worker
+# ================================
+CMD ["python3", "/app/handler.py"]
 
