@@ -47,17 +47,13 @@ def handler(job):
         prompt = job_input.get("prompt")
         duration = int(job_input.get("duration", 30))
         preview = bool(job_input.get("preview", False))
+# HARD LIMIT to avoid timeouts
+duration = min(duration, 10)
 
         if not prompt:
             return {
                 "error": "Prompt is required"
             }
-
-        # Clamp duration (important for stability)
-        if preview:
-            duration = min(duration, 10)
-        else:
-            duration = min(duration, 60)
 
         print(f"🎶 Generating audio | duration={duration}s | preview={preview}")
 
