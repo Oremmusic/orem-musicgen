@@ -16,10 +16,9 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 
 # Upgrade pip
 RUN pip install --upgrade pip && \
-    pip uninstall -y numpy && \
-    pip install numpy==1.26.4 && \
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
-    pip install transformers accelerate runpod audiocraft av
+    pip install --no-cache-dir numpy==1.26.4 && \
+    pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
+    pip install --no-cache-dir transformers accelerate runpod audiocraft av
 
 
 # App
