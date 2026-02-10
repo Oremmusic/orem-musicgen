@@ -1,10 +1,10 @@
 # ================================
-# Base image with CUDA + cuDNN
+# CUDA base (stable for RunPod)
 # ================================
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 
 # ================================
-# System dependencies (CRITICAL)
+# System dependencies (FULL AUDIO)
 # ================================
 RUN apt-get update && apt-get install -y \
     python3 \
@@ -13,6 +13,11 @@ RUN apt-get update && apt-get install -y \
     git \
     ffmpeg \
     libsndfile1 \
+    libavcodec-dev \
+    libavformat-dev \
+    libavdevice-dev \
+    libavutil-dev \
+    libswresample-dev \
     sox \
     && rm -rf /var/lib/apt/lists/*
 
@@ -22,7 +27,7 @@ RUN apt-get update && apt-get install -y \
 RUN python3 -m pip install --upgrade pip
 
 # ----------------
-# Numpy pin (VERY IMPORTANT)
+# NumPy pin (CRITICAL)
 # ----------------
 RUN pip uninstall -y numpy && \
     pip install numpy==1.26.4
@@ -34,14 +39,13 @@ RUN pip install torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/cu121
 
 # ----------------
-# AI + Audio stack
+# AI + Audio stack (NO audiocraft)
 # ----------------
 RUN pip install \
     transformers \
     accelerate \
     soundfile \
     runpod \
-    audiocraft \
     av
 
 # ================================
@@ -50,7 +54,7 @@ RUN pip install \
 WORKDIR /app
 
 # ================================
-# Copy source code
+# Copy handler
 # ================================
 COPY handler.py /app/handler.py
 
@@ -64,4 +68,3 @@ ENV CUDA_VISIBLE_DEVICES=0
 # Start RunPod worker
 # ================================
 CMD ["python3", "/app/handler.py"]
-
