@@ -47,41 +47,54 @@ def handler(job):
         prompt = job_input.get("prompt")
         duration = int(job_input.get("duration", 30))
         preview = bool(job_input.get("preview", False))
-# HARD LIMIT to avoid timeouts
-duration = min(duration, 10)
 
         if not prompt:
             return {
                 "error": "Prompt is required"
             }
 
+        # ----------------------------
+        # HARD SAFETY LIMITS (CRITICAL)
+        # ----------------------------
+        if preview:
+            duration = min(duration, 10)
+        else:
+            duration = min(duration, 60)
+
         print(f"🎶 Generating audio | duration={duration}s | preview={preview}")
 
+        # ----------------------------
+        # Tokenize prompt
+        # ----------------------------
         inputs = processor(
             text=[prompt],
             padding=True,
             return_tensors="pt"
         ).to(device)
 
+        # ----------------------------
+        # Generate audio (SAFE SETTINGS)
+        # ----------------------------
         with torch.no_grad():
-    audio_values = model.generate(
-        **inputs,
-        max_new_tokens=duration * 40
-    )
+            audio_values = model.generate(
+                **inputs,
+                max_new_tokens=duration * 25
+            )
 
-# Decode audio properly (THIS PREVENTS CUDA ASSERTS)
-audio = processor.decode(
-    audio_values[0],
-    sampling_rate=32000
-)
+        # ----------------------------
+        # Decode audio safely
+        # ----------------------------
+        audio = processor.batch_decode(
+            audio_values,
+            sampling_rate=32000
+        )[0]
 
-
-# Convert float32 audio to bytes safely
-audio_tensor = torch.tensor(audio, dtype=torch.float32)
-audio_bytes = audio_tensor.cpu().numpy().tobytes()
-
-audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
-
+        # ----------------------------
+        # Convert audio → base64
+        # ----------------------------
+        audio_tensor = torch.tensor(audio, dtype=torch.float32)
+        audio_bytes = audio_tensor.cpu().numpy().tobytes()
+        audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
 
         return {
             "audio": audio_base64,
@@ -97,8 +110,9 @@ audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
         }
 
 # ----------------------------
-# Start RunPod worker (DO NOT EXIT)
+# Start RunPod worker
 # ----------------------------
 runpod.serverless.start({
     "handler": handler
 })
+
