@@ -1,104 +1,92 @@
-import base64
-import torch
 import runpod
+import torch
+import base64
 import io
 import soundfile as sf
-from transformers import MusicgenForConditionalGeneration, AutoProcessor
+from audiocraft.models import MusicGen
 
-# =========================================
-# GLOBALS
-# =========================================
-model = None
-processor = None
+# =========================================================
+# DEVICE SETUP
+# =========================================================
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Using device: {device}")
 
-# =========================================
-# LOAD MODEL (ULTRA MODE)
-# =========================================
-def load_model():
-    global model, processor
-    if model is None:
-        print("🔥 Loading Mero ULTRA (musicgen-large)...")
+# =========================================================
+# LOAD MODEL (LARGE)
+# =========================================================
 
-        processor = AutoProcessor.from_pretrained(
-            "facebook/musicgen-large"
-        )
+print("Loading musicgen-large...")
+model = MusicGen.get_pretrained("facebook/musicgen-large")
+model = model.to(device)
 
-        model = MusicgenForConditionalGeneration.from_pretrained(
-            "facebook/musicgen-large"
-        ).to(device)
+# Default generation params
+model.set_generation_params(
+    duration=30,
+    temperature=1.0,
+    top_k=250,
+    top_p=0.0
+)
 
-        model.eval()
+print("Model loaded successfully.")
 
-# =========================================
-# HANDLER
-# =========================================
+# =========================================================
+# HANDLER FUNCTION
+# =========================================================
+
 def handler(job):
     try:
-        load_model()
+        job_input = job.get("input", {})
 
-        job_input = job["input"]
-        prompt = job_input.get("prompt", "High quality instrumental")
+        prompt = job_input.get("prompt", "")
         duration = int(job_input.get("duration", 30))
 
-        print(f"🎵 Generating ULTRA beat | {duration}s")
+        print(f"Generating {duration} seconds...")
+        print(f"Prompt: {prompt}")
 
-        inputs = processor(
-            text=[prompt],
-            padding=True,
-            return_tensors="pt"
-        ).to(device)
+        # Dynamically override duration
+        model.set_generation_params(duration=duration)
 
-        # =========================================
-        # ULTRA GENERATION SETTINGS
-        # =========================================
-        audio_tokens = model.generate(
-            **inputs,
-            max_new_tokens=duration * 50,  # increased from 40
-            do_sample=True,
-            temperature=1.0,
-            top_k=250,
-            top_p=0.95,
-        )
+        # Generate audio
+        wav = model.generate([prompt])
 
-        audio = processor.batch_decode(
-            audio_tokens,
-            sampling_rate=32000
-        )[0]
+        # Move to CPU + numpy
+        audio_np = wav[0].cpu().numpy()
 
-        # Convert to float32 numpy
-        audio_np = torch.tensor(audio, dtype=torch.float32).cpu().numpy()
-
-        # Write WAV to buffer (Stereo ready)
-        wav_buffer = io.BytesIO()
+        # Convert to WAV in memory
+        buffer = io.BytesIO()
         sf.write(
-            wav_buffer,
-            audio_np,
-            samplerate=32000,
-            format="WAV",
-            subtype="PCM_16"
+            buffer,
+            audio_np.T,
+            32000,
+            format="WAV"
         )
 
-        wav_bytes = wav_buffer.getvalue()
-        audio_base64 = base64.b64encode(wav_bytes).decode("utf-8")
+        buffer.seek(0)
 
-        print("✅ ULTRA Beat Generated")
+        # Base64 encode (IMPORTANT for RunPod JSON)
+        audio_base64 = base64.b64encode(buffer.read()).decode("utf-8")
+
+        print("Generation complete.")
 
         return {
             "audio": audio_base64,
             "sample_rate": 32000,
             "format": "wav",
-            "mode": "ultra",
-            "duration": duration
+            "duration": duration,
+            "model": "musicgen-large"
         }
 
     except Exception as e:
-        print("❌ Mero Ultra Error:", str(e))
-        return {"error": str(e)}
+        print("ERROR:", str(e))
+        return {
+            "error": str(e)
+        }
 
-# =========================================
-# START RUNPOD
-# =========================================
+# =========================================================
+# START RUNPOD SERVERLESS
+# =========================================================
+
 runpod.serverless.start({
     "handler": handler
 })
