@@ -1,57 +1,62 @@
-import runpod
-import torch
 import base64
-import io
+import torch
+import runpod
 import soundfile as sf
-from audiocraft.models import MusicGen
+import io
+from transformers import MusicgenForConditionalGeneration, AutoProcessor
 
-print("🎵 Loading MusicGen model...")
-model = MusicGen.get_pretrained("facebook/musicgen-small")
-model.set_generation_params(duration=30)
-print("✅ MusicGen model loaded")
+model = None
+processor = None
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
+def load_model():
+    global model, processor
+    if model is None:
+        print("🎵 Loading MusicGen model...")
+        processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
+        model = MusicgenForConditionalGeneration.from_pretrained("facebook/musicgen-small")
+        model.to(device)
+        model.eval()
+        print("✅ MusicGen model loaded")
 
-def handler(event):
+def handler(job):
     try:
-        input_data = event.get("input", {})
+        load_model()
 
-        prompt = input_data.get("prompt", "instrumental beat")
-        duration = int(input_data.get("duration", 30))
+        job_input = job["input"]
+        prompt = job_input.get("prompt", "")
+        duration = int(job_input.get("duration", 15))
+
+        if not prompt:
+            return {"error": "Prompt is required"}
 
         print(f"🎶 Generating audio | duration={duration}s")
 
-        model.set_generation_params(duration=duration)
+        inputs = processor(text=[prompt], return_tensors="pt").to(device)
 
         with torch.no_grad():
-            wav = model.generate([prompt])
+            audio_values = model.generate(
+                **inputs,
+                max_new_tokens=duration * 50
+            )
 
-        # Convert tensor to CPU numpy
-        audio = wav[0].cpu().numpy()
+        audio = audio_values[0].cpu().numpy()
 
-        # Ensure shape is correct (mono)
-        if len(audio.shape) > 1:
-            audio = audio[0]
-
-        # Normalize safely
-        max_val = max(abs(audio).max(), 1e-6)
-        audio = audio / max_val
-
-        # Write WAV into memory buffer
+        # Proper WAV encoding
         buffer = io.BytesIO()
-        sf.write(buffer, audio, 32000, format="WAV")
+        sf.write(buffer, audio.T, 32000, format="WAV")
         buffer.seek(0)
 
-        # Base64 encode
         audio_base64 = base64.b64encode(buffer.read()).decode("utf-8")
 
         return {
-            "audio_base64": audio_base64,
+            "audio": audio_base64,
+            "sample_rate": 32000,
             "duration": duration
         }
 
     except Exception as e:
         print("❌ Handler error:", str(e))
         return {"error": str(e)}
-
 
 runpod.serverless.start({"handler": handler})
