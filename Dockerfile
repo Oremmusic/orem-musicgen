@@ -28,17 +28,15 @@ RUN pip install torch==2.4.0+cu121 \
     torchaudio==2.4.0+cu121 \
     --index-url https://download.pytorch.org/whl/cu121
 
-# Install av explicitly
-RUN pip install av==11.0.0
-
-# Install remaining dependencies
+# Install all Python dependencies, ensuring 'av' is installed last to prevent conflicts
 RUN pip install \
     runpod \
     transformers==4.41.2 \
     accelerate \
     soundfile \
     scipy \
-    audiocraft==1.3.0
+    audiocraft==1.3.0 \
+    av==11.0.0
 
 WORKDIR /app
 COPY handler.py /app/handler.py
