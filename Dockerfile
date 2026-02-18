@@ -12,10 +12,14 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install --upgrade pip
 
+# Install CUDA 12.1 compatible PyTorch 2.4
+RUN pip install torch==2.4.0+cu121 \
+    torchvision==0.19.0+cu121 \
+    torchaudio==2.4.0+cu121 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# Install remaining deps AFTER torch
 RUN pip install \
-    torch==2.1.0 \
-    torchvision==0.16.0 \
-    torchaudio==2.1.0 \
     runpod \
     audiocraft \
     transformers \
@@ -27,4 +31,3 @@ WORKDIR /app
 COPY handler.py /app/handler.py
 
 CMD ["python3", "-u", "handler.py"]
-
