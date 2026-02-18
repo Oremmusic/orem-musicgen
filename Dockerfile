@@ -7,7 +7,14 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     git \
     ffmpeg \
+    pkg-config \
     libsndfile1 \
+    libavcodec-dev \
+    libavformat-dev \
+    libavdevice-dev \
+    libavutil-dev \
+    libswscale-dev \
+    libswresample-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --upgrade pip
